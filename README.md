@@ -1,0 +1,2 @@
+# TransPortEngine
+适用于windows和linux的网络传输引擎，windows采用IOCP事件模型，linux采用epoll事件模型，可支持高并发。
