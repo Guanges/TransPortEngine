@@ -142,121 +142,39 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 		int nNumEvents = epoll_wait(m_nHandleDataEpoll, &Epoll_Event, 1, 1000);
 		if (nNumEvents > 0)
 		{               
-			if (Epoll_Event.events & EPOLLRDHUP)
+			for (int i = 0; i < nNumEvents; i++)
 			{
-				printf("Event not EpollOut And Not EpollIn! 1\n");
-				continue;
-			}
-
-			if (Epoll_Event.events & EPOLLHUP)
-			{
-				printf("Event not EpollOut And Not EpollIn! 2\n");
-				int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->GetSocket());
-				if (nRet < 0)
+				if (Epoll_Event[i].events & EPOLLRDHUP)
 				{
-					printf("TcpSessionMgr_DelSession Error %d\n", pTcpSession->GetSocket());
-				}
-				else
-				{
-					CSSAutoLock AutoLock(pTcpSession->TcpSession_GetEpollEventLock());
-					nRet = NetEventModleEpoll_DelEvent(pTcpSession);
-					if (nRet < 0)
-					{
-						printf("NetEventModleEpoll_DelEvent Error!\n");
-					}
-					nRet = pTcpSession->TcpSession_Fini();
-					if (nRet < 0)
-					{
-						printf("TcpSession_Fini Error!\n");
-					}
-					bFlag = true;
-				}
-				if (bFlag)
-				{
-					delete pTcpSession;
-				}
-				continue;
-			}
-			if (Epoll_Event.events & EPOLLERR)
-			{
-				printf("Event not EpollOut And Not EpollIn! 3\n");
-				continue;
-			}
-
-			if (Epoll_Event.events & EPOLLPRI)
-			{
-				printf("Event not EpollOut And Not EpollIn! 4\n");
-				continue;
-			}
-
-			if (Epoll_Event.events & EPOLLOUT)
-			{
-				bFlag = false;
-				CTcpSession* pTcpSession = reinterpret_cast<CTcpSession*>(Epoll_Event[i].data.ptr);
-				if (nullptr == pTcpSession)
-                		{
+					LOG_ERROR("Event not EpollOut And Not EpollIn! 1");
 					continue;
 				}
-				int nRet =  pTcpSession->TcpSession_IOSend(1);
-				if (nRet < 0)
+
+				if (Epoll_Event[i].events & EPOLLHUP)
 				{
-					printf("TcpSession_IOSend Error! nRet:%d %0x\n", nRet, Epoll_Event.events);
+					LOG_ERROR("Event not EpollOut And Not EpollIn! 2");
+					CTcpSession* pTcpSession = reinterpret_cast<CTcpSession*>(Epoll_Event[i].data.ptr);
+					if (nullptr == pTcpSession)
+					{
+						continue;
+					}
 					int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->TcpSession_GetSocket());
 					if (nRet < 0)
 					{
-						printf("TcpSessionMgr_DelSession Error %d\n", pTcpSession->TcpSession_GetSocket());
+						LOG_ERROR("TcpSessionMgr_DelSession Error {}", pTcpSession->TcpSession_GetSocket());
 					}
 					else
 					{
-						CSSAutoLock AutoLock(pTcpSession->TcpSession_GetEpollEventLock());
+						//CSSAutoLock AutoLock(pTcpSession->TcpSession_GetEpollEventLock());
 						nRet = NetEventModleEpoll_DelEvent(pTcpSession);
 						if (nRet < 0)
 						{
-							printf("NetEventModleEpoll_DelEvent Error!\n");
+							LOG_ERROR("NetEventModleEpoll_DelEvent Error!");
 						}
 						nRet = pTcpSession->TcpSession_Fini();
 						if (nRet < 0)
 						{
-							printf("TcpSession_Fini Error!\n");
-						}
-						bFlag = true;
-					}
-
-					if (bFlag)
-					{
-						delete pTcpSession;
-					}
-					continue;
-				}
-			}
-			if (Epoll_Event.events & EPOLLIN)
-			{
-				CTcpSession* pTcpSession = reinterpret_cast<CTcpSession*>(Epoll_Event[i].data.ptr);
-				if (nullptr == pTcpSession)
-                		{
-					continue;
-                		}
-				int nRet =  pTcpSession->TcpSession_IORecv();
-				if (nRet < 0) 
-				{
-					printf("TcpSession_IORecv Error! nRet:%d %0x\n", nRet, Epoll_Event.events);
-					int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->TcpSession_GetSocket());
-					if (nRet < 0)
-					{
-						printf("TcpSessionMgr_DelSession Error %d\n", pTcpSession->TcpSession_GetSocket());
-					}
-					else
-					{
-						CSSAutoLock AutoLock(pTcpSession->TcpSession_GetEpollEventLock());
-						nRet = NetEventModleEpoll_DelEvent(pTcpSession);
-						if (nRet < 0)
-						{
-							printf("NetEventModleEpoll_DelEvent Error!\n");
-						}
-						nRet = pTcpSession->TcpSession_Fini();
-						if (nRet < 0)
-						{
-							printf("TcpSession_Fini Error!\n");
+							LOG_ERROR("TcpSession_Fini Error!");
 						}
 						bFlag = true;
 					}
@@ -265,6 +183,96 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 						delete pTcpSession;
 					}
 					continue;
+				}
+				if (Epoll_Event[i].events & EPOLLERR)
+				{
+					LOG_ERROR("Event not EpollOut And Not EpollIn! 3");
+					continue;
+				}
+
+				if (Epoll_Event[i].events & EPOLLPRI)
+				{
+					LOG_ERROR("Event not EpollOut And Not EpollIn! 4");
+					continue;
+				}
+
+				if (Epoll_Event[i].events & EPOLLOUT)
+				{
+					bFlag = false;
+					CTcpSession* pTcpSession = reinterpret_cast<CTcpSession*>(Epoll_Event[i].data.ptr);
+					if (nullptr == pTcpSession)
+					{
+						continue;
+					}
+					int nRet = pTcpSession->TcpSession_IOSend(1);
+					if (nRet < 0)
+					{
+						LOG_ERROR("TcpSession_IOSend Error! nRet:{} {}", nRet, Epoll_Event[i].events);
+						int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->TcpSession_GetSocket());
+						if (nRet < 0)
+						{
+							LOG_ERROR("TcpSessionMgr_DelSession Error {}", pTcpSession->TcpSession_GetSocket());
+						}
+						else
+						{
+							//CSSAutoLock AutoLock(pTcpSession->TcpSession_GetEpollEventLock());
+							nRet = NetEventModleEpoll_DelEvent(pTcpSession);
+							if (nRet < 0)
+							{
+								LOG_ERROR("NetEventModleEpoll_DelEvent Error!");
+							}
+							nRet = pTcpSession->TcpSession_Fini();
+							if (nRet < 0)
+							{
+								LOG_ERROR("TcpSession_Fini Error!");
+							}
+							bFlag = true;
+						}
+
+						if (bFlag)
+						{
+							delete pTcpSession;
+						}
+						continue;
+					}
+				}
+				if (Epoll_Event[i].events & EPOLLIN)
+				{
+					CTcpSession* pTcpSession = reinterpret_cast<CTcpSession*>(Epoll_Event[i].data.ptr);
+					if (nullptr == pTcpSession)
+					{
+						continue;
+					}
+					int nRet = pTcpSession->TcpSession_IORecv();
+					if (nRet < 0)
+					{
+						LOG_ERROR("TcpSession_IORecv Error! nRet:%d %0x", nRet, Epoll_Event[i].events);
+						int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->TcpSession_GetSocket());
+						if (nRet < 0)
+						{
+							LOG_ERROR("TcpSessionMgr_DelSession Error {}", pTcpSession->TcpSession_GetSocket());
+						}
+						else
+						{
+							//CSSAutoLock AutoLock(pTcpSession->TcpSession_GetEpollEventLock());
+							nRet = NetEventModleEpoll_DelEvent(pTcpSession);
+							if (nRet < 0)
+							{
+								LOG_ERROR("NetEventModleEpoll_DelEvent Error!");
+							}
+							nRet = pTcpSession->TcpSession_Fini();
+							if (nRet < 0)
+							{
+								LOG_ERROR("TcpSession_Fini Error!");
+							}
+							bFlag = true;
+						}
+						if (bFlag)
+						{
+							delete pTcpSession;
+						}
+						continue;
+					}
 				}
 			}
 		}
