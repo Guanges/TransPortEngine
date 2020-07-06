@@ -135,7 +135,7 @@ int CNetEventModleEpoll::NetEventModleEpoll_DelEvent(CTcpSession* pTcpSession)
 int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadInfo)
 {
 	bool bFlag = false;
-	struct epoll_event Epoll_Event = {0};
+	struct epoll_event Epoll_Event[MAX_EVENT_NUM] = {0};
 	printf("Thread Start!\n");
 	while (pThreadInfo->bWorkThreadFlag)
 	{
@@ -146,13 +146,13 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 			{
 				if (Epoll_Event[i].events & EPOLLRDHUP)
 				{
-					LOG_ERROR("Event not EpollOut And Not EpollIn! 1");
+					printf("Event not EpollOut And Not EpollIn! 1");
 					continue;
 				}
 
 				if (Epoll_Event[i].events & EPOLLHUP)
 				{
-					LOG_ERROR("Event not EpollOut And Not EpollIn! 2");
+					printf("Event not EpollOut And Not EpollIn! 2");
 					CTcpSession* pTcpSession = reinterpret_cast<CTcpSession*>(Epoll_Event[i].data.ptr);
 					if (nullptr == pTcpSession)
 					{
@@ -161,7 +161,7 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 					int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->TcpSession_GetSocket());
 					if (nRet < 0)
 					{
-						LOG_ERROR("TcpSessionMgr_DelSession Error {}", pTcpSession->TcpSession_GetSocket());
+						printf("TcpSessionMgr_DelSession Error {}", pTcpSession->TcpSession_GetSocket());
 					}
 					else
 					{
@@ -169,12 +169,12 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 						nRet = NetEventModleEpoll_DelEvent(pTcpSession);
 						if (nRet < 0)
 						{
-							LOG_ERROR("NetEventModleEpoll_DelEvent Error!");
+							printf("NetEventModleEpoll_DelEvent Error!");
 						}
 						nRet = pTcpSession->TcpSession_Fini();
 						if (nRet < 0)
 						{
-							LOG_ERROR("TcpSession_Fini Error!");
+							printf("TcpSession_Fini Error!");
 						}
 						bFlag = true;
 					}
@@ -186,13 +186,13 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 				}
 				if (Epoll_Event[i].events & EPOLLERR)
 				{
-					LOG_ERROR("Event not EpollOut And Not EpollIn! 3");
+					printf("Event not EpollOut And Not EpollIn! 3");
 					continue;
 				}
 
 				if (Epoll_Event[i].events & EPOLLPRI)
 				{
-					LOG_ERROR("Event not EpollOut And Not EpollIn! 4");
+					printf("Event not EpollOut And Not EpollIn! 4");
 					continue;
 				}
 
@@ -207,11 +207,11 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 					int nRet = pTcpSession->TcpSession_IOSend(1);
 					if (nRet < 0)
 					{
-						LOG_ERROR("TcpSession_IOSend Error! nRet:{} {}", nRet, Epoll_Event[i].events);
+						printf("TcpSession_IOSend Error! nRet:{} {}", nRet, Epoll_Event[i].events);
 						int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->TcpSession_GetSocket());
 						if (nRet < 0)
 						{
-							LOG_ERROR("TcpSessionMgr_DelSession Error {}", pTcpSession->TcpSession_GetSocket());
+							printf("TcpSessionMgr_DelSession Error {}", pTcpSession->TcpSession_GetSocket());
 						}
 						else
 						{
@@ -219,12 +219,12 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 							nRet = NetEventModleEpoll_DelEvent(pTcpSession);
 							if (nRet < 0)
 							{
-								LOG_ERROR("NetEventModleEpoll_DelEvent Error!");
+								printf("NetEventModleEpoll_DelEvent Error!");
 							}
 							nRet = pTcpSession->TcpSession_Fini();
 							if (nRet < 0)
 							{
-								LOG_ERROR("TcpSession_Fini Error!");
+								printf("TcpSession_Fini Error!");
 							}
 							bFlag = true;
 						}
@@ -246,11 +246,11 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 					int nRet = pTcpSession->TcpSession_IORecv();
 					if (nRet < 0)
 					{
-						LOG_ERROR("TcpSession_IORecv Error! nRet:%d %0x", nRet, Epoll_Event[i].events);
+						printf("TcpSession_IORecv Error! nRet:%d %0x", nRet, Epoll_Event[i].events);
 						int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->TcpSession_GetSocket());
 						if (nRet < 0)
 						{
-							LOG_ERROR("TcpSessionMgr_DelSession Error {}", pTcpSession->TcpSession_GetSocket());
+							printf("TcpSessionMgr_DelSession Error {}", pTcpSession->TcpSession_GetSocket());
 						}
 						else
 						{
@@ -258,12 +258,12 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 							nRet = NetEventModleEpoll_DelEvent(pTcpSession);
 							if (nRet < 0)
 							{
-								LOG_ERROR("NetEventModleEpoll_DelEvent Error!");
+								printf("NetEventModleEpoll_DelEvent Error!");
 							}
 							nRet = pTcpSession->TcpSession_Fini();
 							if (nRet < 0)
 							{
-								LOG_ERROR("TcpSession_Fini Error!");
+								printf("TcpSession_Fini Error!");
 							}
 							bFlag = true;
 						}
