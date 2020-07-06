@@ -192,19 +192,19 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 			if (Epoll_Event.events & EPOLLOUT)
 			{
 				bFlag = false;
-				CTcpSession* pTcpSession = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_FindSession(nSock);
+				CTcpSession* pTcpSession = reinterpret_cast<CTcpSession*>(Epoll_Event[i].data.ptr);
 				if (nullptr == pTcpSession)
-                {
+                		{
 					continue;
 				}
 				int nRet =  pTcpSession->TcpSession_IOSend(1);
 				if (nRet < 0)
 				{
 					printf("TcpSession_IOSend Error! nRet:%d %0x\n", nRet, Epoll_Event.events);
-					int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->GetSocket());
+					int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->TcpSession_GetSocket());
 					if (nRet < 0)
 					{
-						printf("TcpSessionMgr_DelSession Error %d\n", pTcpSession->GetSocket());
+						printf("TcpSessionMgr_DelSession Error %d\n", pTcpSession->TcpSession_GetSocket());
 					}
 					else
 					{
@@ -231,19 +231,19 @@ int CNetEventModleEpoll::NetEventModleEpoll_HandleData(LP_THREADINFO_T pThreadIn
 			}
 			if (Epoll_Event.events & EPOLLIN)
 			{
-				CTcpSession* pTcpSession = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_FindSession(nSock);
+				CTcpSession* pTcpSession = reinterpret_cast<CTcpSession*>(Epoll_Event[i].data.ptr);
 				if (nullptr == pTcpSession)
-                {
+                		{
 					continue;
-                }
+                		}
 				int nRet =  pTcpSession->TcpSession_IORecv();
 				if (nRet < 0) 
 				{
 					printf("TcpSession_IORecv Error! nRet:%d %0x\n", nRet, Epoll_Event.events);
-					int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->GetSocket());
+					int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(pTcpSession->TcpSession_GetSocket());
 					if (nRet < 0)
 					{
-						printf("TcpSessionMgr_DelSession Error %d\n", pTcpSession->GetSocket());
+						printf("TcpSessionMgr_DelSession Error %d\n", pTcpSession->TcpSession_GetSocket());
 					}
 					else
 					{
