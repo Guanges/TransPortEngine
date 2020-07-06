@@ -50,7 +50,7 @@ CTcpClient::CTcpClient(char *szIp, int nPort)
 #ifndef _WINDOWS
 	m_AddrServer.sin_addr.s_addr = inet_addr(szIp);
 #else
-	m_AddrServer.sin_addr.S_un.S_addr= inet_addr(szIp);//INADDR_ANY表示任何IP
+	m_AddrServer.sin_addr.S_un.S_addr= inet_addr(szIp);//INADDR_ANY卤铆脢戮脠脦潞脦IP
 #endif
 	m_AddrServer.sin_family=AF_INET;
 	m_AddrServer.sin_port=htons(nPort);
@@ -140,7 +140,7 @@ int CTcpClient::TcpClient_SocketInit(ITransPortEngineRecv *pITransPortEngineRecv
 
 			m_bRecvFlag = true;
 #ifndef _WINDOWS
-			int nRet = pthread_create(&m_tRecvThread, 0, RecvThread, this);
+			nRet = pthread_create(&m_tRecvThread, 0, RecvThread, this);
 			if (nRet < 0)
 			{
 				if (m_nSocket)
