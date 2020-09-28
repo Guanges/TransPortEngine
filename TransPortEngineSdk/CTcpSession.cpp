@@ -94,8 +94,7 @@ int CTcpSession::TcpSession_Init(SOCKET Socket, int nEventModleIndex, LP_NET_FIV
 	int nFlag = fcntl(m_nSocket, F_GETFL);
 	fcntl(m_nSocket, F_SETFL, nFlag | O_NONBLOCK);
 
-	m_pRecvCache = new RECV_CACHE_T;
-	memset(m_pRecvCache, 0, sizeof(RECV_CACHE_T));
+	//memset(&m_RecvCache, 0, sizeof(RECV_CACHE_T));
 	if (m_pITransPortEngineRecv)
 	{
 		m_pITransPortEngineRecv->OnTransPortEngineNotify(static_cast<int>(m_nSocket), CONNECT, NULL, this);
@@ -194,31 +193,33 @@ int CTcpSession::TcpSession_IOSend(int nSquence)
 {
 	
 #ifndef _WINDOWS
-	
-	if (m_SendBufs.empty())
-	{
-		return 0;
-	}
 	LP_BUFINFO_T pBufInfo = NULL;
 	{
 		CSSAutoLock AutoLock(&m_SendBufLock);
+		if (m_SendBufs.empty())
+		{
+			return 0;
+		}
 		pBufInfo = m_SendBufs.front();
 		m_SendBufs.erase(m_SendBufs.begin());
 	}
 	if (NULL  == pBufInfo)
 	{
+		LOG_ERROR("BufInfo Is Nullptr");
 		return 0;
 	}
 	int nRet = write(m_nSocket, pBufInfo->szBuf, pBufInfo->nBufLen);
 	if (nRet == -1) 
 	{
-        	if (errno != EINTR && errno != EAGAIN) 
+        if (errno != EINTR && errno != EAGAIN) 
 		{
-            		return -1;
+			LOG_ERROR("write data errno:{}", errno);
+            return -1;
 		}
 	}
 	else if (nRet != pBufInfo->nBufLen)
 	{
+		LOG_ERROR("Werite Data Len NeedLen:{}, RealLen:{}", pBufInfo->nBufLen, nRet);
 		return -2;
 	}
 	delete [] pBufInfo->szBuf;
@@ -226,6 +227,7 @@ int CTcpSession::TcpSession_IOSend(int nSquence)
 	nRet = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
 	if (nRet < 0)
 	{
+		LOG_ERROR("NetEventModleEpoll_ModEvent Error Ret:{}", nRet);
 		return -1;
 	}
 #else
@@ -282,132 +284,144 @@ int CTcpSession::TcpSession_IOSend(int nSquence)
 int CTcpSession::TcpSession_IORecv()
 {
 #ifndef _WINDOWS
-	memset(m_pRecvCache, 0, sizeof(RECV_CACHE_T));
-	m_pRecvCache->nRecvLen = MAX_BUFFER_LEN;
-	int nRet = read(m_nSocket, m_pRecvCache->szRecvBuf, m_pRecvCache->nRecvLen);
-	if (nRet > 0)
+	int nRet = 0;
+	char szRecvBuf[1024] = {0};
+	while (true)
 	{
-		if (m_bIsHaveHead)  //处理有头数据
+		//memset(&m_RecvCache, 0, sizeof(RECV_CACHE_T));
+		//m_RecvCache.nRecvLen = MAX_BUFFER_LEN;
+		memset(szRecvBuf, 0, 1024);
+		nRet = read(m_nSocket, szRecvBuf, 1024);
+		if (nRet > 0)
 		{
-			if (m_bIsRecvHead)  //已经接收到头
+			if (m_bIsHaveHead)  //处理有头数据
 			{
-				if (static_cast<int>(m_nNeedRecvDataLen - TcpSession_GetRecvCacheLen()) == nRet)
+				if (m_bIsRecvHead)  //已经接收到头
 				{
-					char* szBuf = new char[m_nNeedRecvDataLen + 1];
-					memset(szBuf, 0, m_nNeedRecvDataLen + 1);
-					int nLen = TcpSession_GetRecvCacheBuf(szBuf);
-					memcpy(szBuf + nLen, m_pRecvCache->szRecvBuf, nRet);
-					if (0 == m_nRecvDataType)
+					if (static_cast<int>(m_nNeedRecvDataLen - TcpSession_GetRecvCacheLen()) == nRet)
 					{
-						TcpSession_HeadleHB(szBuf, m_nNeedRecvDataLen);
-					}
-					else if (1 == m_nRecvDataType)
-					{
-						if (m_pITransPortEngineRecv)
+						char* szBuf = new char[m_nNeedRecvDataLen + 1];
+						memset(szBuf, 0, m_nNeedRecvDataLen + 1);
+						int nLen = TcpSession_GetRecvCacheBuf(szBuf);
+						memcpy(szBuf + nLen, szRecvBuf, nRet);
+						if (0 == m_nRecvDataType)
 						{
-							m_pITransPortEngineRecv->OnTransPortEngineRecv(static_cast<int>(m_nSocket), m_nNeedRecvDataLen, szBuf, this);
+							TcpSession_HeadleHB(szBuf, m_nNeedRecvDataLen);
 						}
+						else if (1 == m_nRecvDataType)
+						{
+							if (m_pITransPortEngineRecv)
+							{
+								m_pITransPortEngineRecv->OnTransPortEngineRecv(static_cast<int>(m_nSocket), m_nNeedRecvDataLen, szBuf, this);
+							}
+						}
+						m_bIsRecvHead = false;
+						m_nNeedRecvDataLen = 0;
 					}
-					m_bIsRecvHead = false;
-					m_nNeedRecvDataLen = 0;
-}
-				else if (static_cast<int>(m_nNeedRecvDataLen - TcpSession_GetRecvCacheLen()) < nRet)
-				{
-					LP_BUFINFO_T pBufInfo = new BUFINFO_T;
-					memset(pBufInfo, 0, sizeof(BUFINFO_T));
-					pBufInfo->nBufLen = nRet;
-					pBufInfo->szBuf = new char[nRet + 1];
-					memset(pBufInfo->szBuf, 0, nRet + 1);
-					memcpy(pBufInfo->szBuf, m_pRecvCache->szRecvBuf, nRet);
-					CSSAutoLock AutoLock(&m_RecvBufLock);
-					m_RecvBufs.push_back(pBufInfo);
+					else if (static_cast<int>(m_nNeedRecvDataLen - TcpSession_GetRecvCacheLen()) < nRet)
+					{
+						LP_BUFINFO_T pBufInfo = new BUFINFO_T;
+						memset(pBufInfo, 0, sizeof(BUFINFO_T));
+						pBufInfo->nBufLen = nRet;
+						pBufInfo->szBuf = new char[nRet + 1];
+						memset(pBufInfo->szBuf, 0, nRet + 1);
+						memcpy(pBufInfo->szBuf, szRecvBuf, nRet);
+						CSSAutoLock AutoLock(&m_RecvBufLock);
+						m_RecvBufs.push_back(pBufInfo);
+					}
+					else if (static_cast<int>(m_nNeedRecvDataLen - TcpSession_GetRecvCacheLen()) > nRet)
+					{
+						LOG_ERROR("Read Data Len Error");
+						return -1;
+					}
 				}
-				else if (static_cast<int>(m_nNeedRecvDataLen - TcpSession_GetRecvCacheLen()) > nRet)
+				else //未接收到头
 				{
-					return -1;
+					if (nRet > static_cast<int>(sizeof(HEAD_MSG_T) - TcpSession_GetRecvCacheLen()))
+					{
+						return -1;
+					}
+					else if (nRet < static_cast<int>(sizeof(HEAD_MSG_T) - TcpSession_GetRecvCacheLen()))
+					{
+						LP_BUFINFO_T pBufInfo = new BUFINFO_T;
+						memset(pBufInfo, 0, sizeof(BUFINFO_T));
+						pBufInfo->nBufLen = nRet;
+						pBufInfo->szBuf = new char[nRet + 1];
+						memset(pBufInfo->szBuf, 0, nRet + 1);
+						memcpy(pBufInfo->szBuf, szRecvBuf, nRet);
+						CSSAutoLock AutoLock(&m_RecvBufLock);
+						m_RecvBufs.push_back(pBufInfo);
+					}
+					else if (nRet == static_cast<int>(sizeof(HEAD_MSG_T) - TcpSession_GetRecvCacheLen()))
+					{
+						char* szBuf = new char[sizeof(HEAD_MSG_T)];
+						memset(szBuf, 0, sizeof(HEAD_MSG_T));
+						int nLen = TcpSession_GetRecvCacheBuf(szBuf);
+						memcpy(szBuf + nLen, szRecvBuf, nRet);
+						LP_HEAD_MSG_T pHeadMsg = reinterpret_cast<LP_HEAD_MSG_T>(szBuf);
+						if (!memcmp(pHeadMsg->szHeadType, HEART_BEAT, sizeof(HEART_BEAT)))
+						{
+							m_nRecvDataType = 0;
+							m_nNeedRecvDataLen = ntohl(pHeadMsg->nDataLen);
+							m_uSaltValue = ntohs(pHeadMsg->uSaltValue);
+							if (m_nNeedRecvDataLen > 0)
+							{
+								m_bIsRecvHead = true;
+							}
+							else
+							{
+								TcpSession_HeadleHB(NULL, 0);
+							}
+							nRet = TcpSession_IOSend(szBuf, sizeof(HEAD_MSG_T));
+							if (nRet < 0)
+							{
+								LOG_ERROR("TcpSession_IOSend HB Error");
+							}
+						}
+						else if (!memcmp(pHeadMsg->szHeadType, RECV_DATA, sizeof(RECV_DATA)))
+						{
+							m_nRecvDataType = 1;
+							m_nNeedRecvDataLen = ntohl(pHeadMsg->nDataLen);
+							m_uSaltValue = ntohs(pHeadMsg->uSaltValue);
+							if (m_nNeedRecvDataLen > 0)
+							{
+								m_bIsRecvHead = true;
+							}
+						}
+						delete[] szBuf;
+					}
 				}
 			}
-			else //未接收到头
+			else //处理无头数据
 			{
-				if (nRet > static_cast<int>(sizeof(HEAD_MSG_T) - TcpSession_GetRecvCacheLen()))
+				if (m_pITransPortEngineRecv)
 				{
-					return -1;
-				}
-				else if (nRet < static_cast<int>(sizeof(HEAD_MSG_T) - TcpSession_GetRecvCacheLen()))
-				{
-					LP_BUFINFO_T pBufInfo = new BUFINFO_T;
-					memset(pBufInfo, 0, sizeof(BUFINFO_T));
-					pBufInfo->nBufLen = nRet;
-					pBufInfo->szBuf = new char[nRet + 1];
-					memset(pBufInfo->szBuf, 0, nRet + 1);
-					memcpy(pBufInfo->szBuf, m_pRecvCache->szRecvBuf, nRet);
-					CSSAutoLock AutoLock(&m_RecvBufLock);
-					m_RecvBufs.push_back(pBufInfo);
-				}
-				else if (nRet == static_cast<int>(sizeof(HEAD_MSG_T) - TcpSession_GetRecvCacheLen()))
-				{
-					char* szBuf = new char[sizeof(HEAD_MSG_T)];
-					memset(szBuf, 0, sizeof(HEAD_MSG_T));
-					int nLen = TcpSession_GetRecvCacheBuf(szBuf);
-					memcpy(szBuf + nLen, m_pRecvCache->szRecvBuf, nRet);
-					LP_HEAD_MSG_T pHeadMsg = reinterpret_cast<LP_HEAD_MSG_T>(szBuf);
-					if (!memcmp(pHeadMsg->szHeadType, HEART_BEAT, sizeof(HEART_BEAT)))
-					{
-						m_nRecvDataType = 0;
-						m_nNeedRecvDataLen = ntohl(pHeadMsg->nDataLen);
-						m_uSaltValue = ntohs(pHeadMsg->uSaltValue);
-						if (m_nNeedRecvDataLen > 0)
-						{
-							m_bIsRecvHead = true;
-						}
-						else
-						{
-							TcpSession_HeadleHB(NULL, 0);
-						}
-						nRet = TcpSession_IOSend(szBuf, sizeof(HEAD_MSG_T));
-						if (nRet < 0)
-						{
-							cout << "TcpSession_IOSend HB Error\n" << endl;
-						}
-					}
-					else if (!memcmp(pHeadMsg->szHeadType, RECV_DATA, sizeof(RECV_DATA)))
-					{
-						m_nRecvDataType = 1;
-						m_nNeedRecvDataLen = ntohl(pHeadMsg->nDataLen);
-						m_uSaltValue = ntohs(pHeadMsg->uSaltValue);
-						if (m_nNeedRecvDataLen > 0)
-						{
-							m_bIsRecvHead = true;
-						}
-					}
-					delete[] szBuf;
+					m_pITransPortEngineRecv->OnTransPortEngineRecv(static_cast<int>(m_nSocket), nRet, szRecvBuf, this);
 				}
 			}
 		}
-		else //处理无头数据
+		else if (0 == nRet)
 		{
-			if (m_pITransPortEngineRecv)
-			{
-				m_pITransPortEngineRecv->OnTransPortEngineRecv(static_cast<int>(m_nSocket), nRet, m_pRecvCache->szRecvBuf, this);
-			}
+			LOG_ERROR("Read Data Len Is 0");
+			return -1;
 		}
-
-
-	}
-	else if (0 == nRet)
-	{
-		return -1;
-	}
-	else if (-1 == nRet)
-	{
-		if (errno != EINTR && errno != EAGAIN)
+		else if (-1 == nRet)
 		{
-			return -2;
+			if (errno != EINTR && errno != EAGAIN)
+			{
+				LOG_ERROR("Read Data Error errno:{}", errno);
+				return -2;
+			}
+			else if (errno == EAGAIN)
+			{
+				break;
+			}
 		}
 	}
 	nRet = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
 	if (nRet < 0)
 	{
+		LOG_ERROR("NetEventModleEpoll_ModEvent Error");
 		return -1;
 	}
 #else
@@ -602,21 +616,42 @@ int CTcpSession::TcpSession_IOSend(const char *szData, const int nDataLen)
 		return -1;
 	}
 #ifndef _WINDOWS
-	LP_BUFINFO_T pBufInfo = new BUFINFO_T;
-	memset(pBufInfo, 0, sizeof(BUFINFO_T));
-
-	pBufInfo->szBuf = new char[nDataLen + 1];
-	memset(pBufInfo->szBuf, 0, nDataLen + 1);
-	memcpy(pBufInfo->szBuf, szData, nDataLen);
-	pBufInfo->nBufLen = nDataLen;
-	CSSAutoLock AutoLock(&m_SendBufLock);
-	m_SendBufs.push_back(pBufInfo);
-
-	int nRet = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
-	if (nRet < 0)
+	int nWriteLen = 0;
+	while (nWriteLen < nDataLen) 
 	{
-		return -2;
+		int n = write(m_nSocket, szData + nWriteLen, nDataLen - nWriteLen);
+		if (n < 0) 
+		{
+			if (errno == EAGAIN)
+			{
+				break;
+			}
+			perror("write");
+			return -2;
+		}
+		nWriteLen += n;
 	}
+
+	if (nWriteLen < nDataLen)
+	{
+		LOG_INFO("Write Data Eagain");
+		LP_BUFINFO_T pBufInfo = new BUFINFO_T;
+		memset(pBufInfo, 0, sizeof(BUFINFO_T));
+
+		pBufInfo->szBuf = new char[nDataLen - nWriteLen + 1];
+		memset(pBufInfo->szBuf, 0, nDataLen - nWriteLen + 1);
+		memcpy(pBufInfo->szBuf, szData + nWriteLen, nDataLen - nWriteLen);
+		pBufInfo->nBufLen = nDataLen - nWriteLen;
+		CSSAutoLock AutoLock(&m_SendBufLock);
+		m_SendBufs.push_back(pBufInfo);
+
+		int nRet = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
+		if (nRet < 0)
+		{
+			LOG_ERROR("NetEventModleEpoll_ModEvent Error Ret:{}", nRet);
+			return -2;
+		}
+}
 #else
 	if (false == m_bIsToBeClose)
 	{
@@ -658,6 +693,7 @@ int CTcpSession::TcpSession_IORecv(int nPostRecvEventCount)
 	int nRet = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
 	if (nRet < 0)
 	{
+		LOG_ERROR("NetEventModleEpoll_ModEvent Error Ret；{}", nRet);
 		return -1;
 	}
 #else

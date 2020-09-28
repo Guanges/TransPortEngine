@@ -52,6 +52,7 @@ TRANSPORT_ENGINE_SDK_API int TransPortEngine_DestroyServer(void* pTransPortEngin
 	{
 		return -2;
 	}
+	delete pAcceptSession;
 	return 0;
 }
 

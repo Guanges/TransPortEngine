@@ -81,6 +81,21 @@ int CTcpSessionMgr::TcpSessionMgr_Init(bool bIsHeartbeat, CNetEventModleMgr *pNe
 
 int CTcpSessionMgr::TcpSessionMgr_Fini()
 {
+#ifndef _WINDOWS
+	if (m_bIsHeartbeat)
+	{
+		m_bIsHeartbeat = false;
+		pthread_join(m_tHeartbeatDetection, nullptr);
+	}
+#else
+	if (m_bIsHeartbeat)
+	{
+		m_bIsHeartbeat = false;
+		WaitForSingleObject(m_hHeartbeatDetection, INFINITE);
+	}
+#endif
+
+
 	CSSAutoLock AutoLock(&m_TcpSessionMgrLock);
 #ifndef _WINDOWS
 	map<int, CTcpSession*>::iterator TcpSessionIt = m_TcpSessions.begin();
@@ -172,7 +187,7 @@ void CTcpSessionMgr::TcpSessionMgr_HeartbeatDetection()
 				CTcpSession* pTcpSession = TcpSessionIt->second;
 				{
 #ifndef _WINDOWS
-					CSSAutoLock AutoLock(pTcpSession->TcpSession_GetEpollEventLock());
+					//CSSAutoLock AutoLock(pTcpSession->TcpSession_GetEpollEventLock());
 #else
 					CSSAutoLock AutoLock(pTcpSession->TcpSession_GetIOCPEventLock());
 #endif
@@ -184,20 +199,20 @@ void CTcpSessionMgr::TcpSessionMgr_HeartbeatDetection()
 						nRet = m_pBindNetEventModels->NetEventModleMgr_FindModle(pTcpSession->TcpSession_GetNetEventModleIndex())->NetEventModleEpoll_DelEvent(pTcpSession);
 						if (nRet < 0)
 						{
-							printf("NetEventModleEpoll_DelEvent Error!\n");
+							LOG_ERROR("NetEventModleEpoll_DelEvent Error!");
 						}
 #else
 						nRet = m_pBindNetEventModels->NetEventModleMgr_FindModle(pTcpSession->TcpSession_GetNetEventModleIndex())->NetEventModleIOCP_DelEvent(pTcpSession);
 						if (nRet < 0)
 						{
-							printf("NetEventModleIOCP_DelEvent Error!\n");
+							LOG_ERROR("NetEventModleIOCP_DelEvent Error!");
 						}
 #endif
 
 						nRet = pTcpSession->TcpSession_Fini();
 						if (nRet < 0)
 						{
-							printf("TcpSession_Fini Error!\n");
+							LOG_ERROR("TcpSession_Fini Error!");
 						}
 						bFlag = true;
 					}
@@ -211,7 +226,7 @@ void CTcpSessionMgr::TcpSessionMgr_HeartbeatDetection()
 					delete pTcpSession;
 				}
 			}
-			printf("TCPSession Size:%d\n", static_cast<int>(m_TcpSessions.size()));
+			LOG_INFO("TCPSession Size:{}", static_cast<int>(m_TcpSessions.size()));
 		}
 	}
 }

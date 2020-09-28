@@ -50,7 +50,7 @@ CTcpClient::CTcpClient(char *szIp, int nPort)
 #ifndef _WINDOWS
 	m_AddrServer.sin_addr.s_addr = inet_addr(szIp);
 #else
-	m_AddrServer.sin_addr.S_un.S_addr= inet_addr(szIp);//INADDR_ANY卤铆脢戮脠脦潞脦IP
+	m_AddrServer.sin_addr.S_un.S_addr= inet_addr(szIp);//INADDR_ANY表示任何IP
 #endif
 	m_AddrServer.sin_family=AF_INET;
 	m_AddrServer.sin_port=htons(nPort);

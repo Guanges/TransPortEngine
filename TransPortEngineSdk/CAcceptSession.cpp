@@ -151,7 +151,7 @@ int CAcceptSession::AcceptSession_Init(int nListenPort, int nEventModleCount, in
 
 	SockAddr.sin_port = htons(nListenPort);
 
-	if (SOCKET_ERROR == bind(m_Socket, (struct sockaddr *)&SockAddr, sizeof(sockaddr)))
+	if (SOCKET_ERROR == bind(m_Socket, (const struct sockaddr *)&SockAddr, static_cast<int>(sizeof(sockaddr))))
 	{
 		return -3;
 	}
@@ -183,7 +183,7 @@ int CAcceptSession::AcceptSession_Init(int nListenPort, int nEventModleCount, in
 	}
 
 #ifndef _WINDOWS
-	m_AcceptEpoll = epoll_create(1);
+	m_AcceptEpoll = epoll_create(1000);
 	if (m_AcceptEpoll < 0)
 	{
 		return -9;
@@ -217,21 +217,6 @@ int CAcceptSession::AcceptSession_Init(int nListenPort, int nEventModleCount, in
 		if (WSA_IO_PENDING != WSAGetLastError())
 		{
 			return -11;
-		}
-	}
-	m_pPerIoContextAccept = new PER_IO_CONTEXT_ACCEPT_T;
-	memset(m_pPerIoContextAccept, 0, sizeof(PER_IO_CONTEXT_ACCEPT_T));
-	m_pPerIoContextAccept->OpType = IO_ACCEPT;
-	m_pPerIoContextAccept->Overlapped = { 0 };
-	m_pPerIoContextAccept->sockAccept = WSASocketW(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-	m_pPerIoContextAccept->wsaBuf.len = MAX_BUFFER_LEN;
-	m_pPerIoContextAccept->wsaBuf.buf = m_pPerIoContextAccept->szBuffer;
-	DWORD dwRecvLen = 0;
-	if (!m_AcceptEx(m_Socket, m_pPerIoContextAccept->sockAccept, &m_pPerIoContextAccept->wsaBuf, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, &dwRecvLen, &m_pPerIoContextAccept->Overlapped))
-	{
-		if (WSA_IO_PENDING != WSAGetLastError())
-		{
-			return -12;
 		}
 	}
 	m_hAcceptThread = (HANDLE)_beginthread(AcceptThread, 0, this);
@@ -284,99 +269,100 @@ int CAcceptSession::AcceptSession_Accept()
 	m_nAcceptIndex = 0;
 	while (m_bAcceptThreadFlag)
 	{
-		int nNumEvent = epoll_wait(m_AcceptEpoll, &m_pEpollEvent, 1, 1000);
+		int nNumEvent = epoll_wait(m_AcceptEpoll, &m_pEpollEvent, 1000, 1000);
 		if (nNumEvent > 0) 
 		{
-			int nAcceptSock = accept(m_nSocket, NULL, NULL);
-			if (nAcceptSock > 0) 
+			for (int i = 0; i < nNumEvent; i++)
 			{
-				m_nAcceptIndex++;
-				int nNetEventModleIndex = m_nAcceptIndex % m_nEventModleCount;
-
-				CTcpSession* pTcpSession = new CTcpSession;
-				if (NULL == pTcpSession)
+				int nAcceptSock = accept(m_nSocket, NULL, NULL);
+				if (nAcceptSock > 0) 
 				{
-					printf("Create CTcpSession Error:%p\n", pTcpSession);
-					close(nAcceptSock);
-					continue;
-				}
+					m_nAcceptIndex++;
+					int nNetEventModleIndex = m_nAcceptIndex % m_nEventModleCount;
 
-				LP_NET_FIVE_ELEMENT_T pNetFiveElement = new NET_FIVE_ELEMENT_T;
-				if (NULL == pNetFiveElement)
-				{
-					printf("Create NET_FIVE_ELEMENT_T Error:%p\n", pNetFiveElement);
-					close(nAcceptSock);
-					delete pTcpSession;
-					continue;
-				}
+					CTcpSession* pTcpSession = new CTcpSession;
+					if (NULL == pTcpSession)
+					{
+						LOG_ERROR("Create CTcpSession Error");
+						close(nAcceptSock);
+						continue;
+					}
 
-				CNetEventModleEpoll* pNetEventModleEpoll = m_pNetEventModleMgr->NetEventModleMgr_FindModle(nNetEventModleIndex);
-				if (NULL == pNetEventModleEpoll)
-				{
-					printf("NetEventModleMgr_FindModle nNetEventModleIndex:%d\n", nNetEventModleIndex);
-					delete pTcpSession;
-					delete pNetFiveElement;
-					continue;
-				}
+					LP_NET_FIVE_ELEMENT_T pNetFiveElement = new NET_FIVE_ELEMENT_T;
+					if (NULL == pNetFiveElement)
+					{
+						LOG_ERROR("Create NET_FIVE_ELEMENT_T Error");
+						close(nAcceptSock);
+						delete pTcpSession;
+						continue;
+					}
 
-				int nRet = pTcpSession->TcpSession_Init(nAcceptSock, pNetEventModleEpoll, pNetFiveElement, m_pITransPortEngineRecv, m_bIsHaveHead, this);
-				if (nRet < 0)
-				{
-					printf("TcpSession_Init Error:%d\n", nRet);
-					delete pTcpSession;
-					delete pNetFiveElement;
-					continue;
-				}
+					CNetEventModleEpoll* pNetEventModleEpoll = m_pNetEventModleMgr->NetEventModleMgr_FindModle(nNetEventModleIndex);
+					if (NULL == pNetEventModleEpoll)
+					{
+						LOG_ERROR("NetEventModleMgr_FindModle nNetEventModleIndex:{}", nNetEventModleIndex);
+						delete pTcpSession;
+						continue;
+					}
 
-				nRet = m_pTcpSessionMgr->TcpSessionMgr_AddSession(pTcpSession);
-				if (nRet < 0)
-				{
-					nRet = pTcpSession->TcpSession_Fini();
+					int nRet = pTcpSession->TcpSession_Init(nAcceptSock, pNetEventModleEpoll, pNetFiveElement, m_pITransPortEngineRecv, m_bIsHaveHead, this);
 					if (nRet < 0)
 					{
-						printf("TcpSession_Fini Error:%d\n", nRet);
+						LOG_ERROR("TcpSession_Init Error:{}", nRet);
+						delete pTcpSession;
+						continue;
 					}
-					delete pTcpSession;
-					continue;
-				}
 
-				nRet = pNetEventModleEpoll->NetEventModleEpoll_AddEvent(pTcpSession);
-				if (nRet < 0)
-				{
-					nRet = m_pTcpSessionMgr->TcpSessionMgr_DelSession(nAcceptSock);
+					nRet = m_pTcpSessionMgr->TcpSessionMgr_AddSession(pTcpSession);
 					if (nRet < 0)
 					{
-						printf("TcpSessionMgr_DelSession Error:%d\n", nRet);
+						nRet = pTcpSession->TcpSession_Fini();
+						if (nRet < 0)
+						{
+							LOG_ERROR("TcpSession_Fini Error:{}", nRet);
+						}
+						delete pTcpSession;
+						continue;
 					}
-					nRet = pTcpSession->TcpSession_Fini();
-					if (nRet < 0)
-					{
-						printf("TcpSession_Fini Error:%d\n", nRet);
-					}
-					delete pTcpSession;
-					continue;
-				}
 
-				nRet = pTcpSession->TcpSession_IORecv(1);
-				if (nRet < 0)
-				{
-					nRet = pNetEventModleEpoll->NetEventModleEpoll_DelEvent(pTcpSession);
+					nRet = pNetEventModleEpoll->NetEventModleEpoll_AddEvent(pTcpSession);
 					if (nRet < 0)
 					{
-						printf("NetEventModleIOCP_DelEvent Error:%d\n", nRet);
+						nRet = m_pTcpSessionMgr->TcpSessionMgr_DelSession(nAcceptSock);
+						if (nRet < 0)
+						{
+							LOG_ERROR("TcpSessionMgr_DelSession Error:{}", nRet);
+						}
+						nRet = pTcpSession->TcpSession_Fini();
+						if (nRet < 0)
+						{
+							LOG_ERROR("TcpSession_Fini Error:{}", nRet);
+						}
+						delete pTcpSession;
+						continue;
 					}
-					nRet = m_pTcpSessionMgr->TcpSessionMgr_DelSession(nAcceptSock);
+
+					nRet = pTcpSession->TcpSession_IORecv(1);
 					if (nRet < 0)
 					{
-						printf("TcpSessionMgr_DelSession Error:%d\n", nRet);
+						nRet = pNetEventModleEpoll->NetEventModleEpoll_DelEvent(pTcpSession);
+						if (nRet < 0)
+						{
+							LOG_ERROR("NetEventModleIOCP_DelEvent Error:{}", nRet);
+						}
+						nRet = m_pTcpSessionMgr->TcpSessionMgr_DelSession(nAcceptSock);
+						if (nRet < 0)
+						{
+							LOG_ERROR("TcpSessionMgr_DelSession Error:{}", nRet);
+						}
+						nRet = pTcpSession->TcpSession_Fini();
+						if (nRet < 0)
+						{
+							LOG_ERROR("TcpSession_Fini Error:{}", nRet);
+						}
+						delete pTcpSession;
+						continue;
 					}
-					nRet = pTcpSession->TcpSession_Fini();
-					if (nRet < 0)
-					{
-						printf("TcpSession_Fini Error:%d\n", nRet);
-					}
-					delete pTcpSession;
-					continue;
 				}
 
 			}
@@ -421,8 +407,26 @@ bool CAcceptSession::AcceptSession_HandleAcceptError(const DWORD& dwErrno)
 
 int CAcceptSession::AcceptSession_Accept()
 {
+	m_pPerIoContextAccept = new PER_IO_CONTEXT_ACCEPT_T;
+	memset(m_pPerIoContextAccept, 0, sizeof(PER_IO_CONTEXT_ACCEPT_T));
+	m_pPerIoContextAccept->OpType = IO_ACCEPT;
+	m_pPerIoContextAccept->Overlapped = { 0 };
+	
 	while (m_bAcceptThreadFlag)
 	{
+		m_pPerIoContextAccept->sockAccept = WSASocketW(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+		m_pPerIoContextAccept->wsaBuf.buf = m_pPerIoContextAccept->szBuffer;
+		m_pPerIoContextAccept->wsaBuf.len = MAX_BUFFER_LEN;
+		memset(m_pPerIoContextAccept->szBuffer, 0, MAX_BUFFER_LEN);
+		DWORD dwRecvLen = 0;
+		if (!m_AcceptEx(m_Socket, m_pPerIoContextAccept->sockAccept, &m_pPerIoContextAccept->wsaBuf, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, &dwRecvLen, &m_pPerIoContextAccept->Overlapped))
+		{
+			if (WSA_IO_PENDING != WSAGetLastError())
+			{
+				break;
+			}
+		}
+
 		OVERLAPPED*          pOverlapped = NULL;
 		CAcceptSession*      pAcceptSession = NULL;
 		DWORD                dwBytesTransfered = 0;
@@ -443,18 +447,18 @@ int CAcceptSession::AcceptSession_Accept()
 		}
 		else
 		{
-			m_nAcceptIndex++;
-			int nNetEventModleIndex = m_nAcceptIndex % m_nEventModleCount;
 			LP_PER_IO_CONTEXT_ACCEPT_T pIoContext = CONTAINING_RECORD(pOverlapped, PER_IO_CONTEXT_ACCEPT_T, Overlapped);
-			if ((0 == dwBytesTransfered) && (IO_RECV == pIoContext->OpType || IO_SEND == pIoContext->OpType))
+			if ((0 == dwBytesTransfered) && (IO_ACCEPT == pIoContext->OpType || IO_RECV == pIoContext->OpType || IO_SEND == pIoContext->OpType))
 			{
 				// 释放掉对应的资源
 				//@TODO
-
+				closesocket(pIoContext->sockAccept);
 				continue;
 			}
 			else
 			{
+				m_nAcceptIndex++;
+				int nNetEventModleIndex = m_nAcceptIndex % m_nEventModleCount;
 				switch (pIoContext->OpType)
 				{
 				case IO_ACCEPT:
@@ -462,7 +466,7 @@ int CAcceptSession::AcceptSession_Accept()
 					CTcpSession* pTcpSession = new CTcpSession;
 					if (NULL == pTcpSession)
 					{
-						printf("Create CTcpSession Error:%p\n", pTcpSession);
+						LOG_ERROR("Create CTcpSession Error");
 						closesocket(pIoContext->sockAccept);
 						continue;
 					}
@@ -470,7 +474,7 @@ int CAcceptSession::AcceptSession_Accept()
 					LP_NET_FIVE_ELEMENT_T pNetFiveElement = new NET_FIVE_ELEMENT_T;
 					if (NULL == pNetFiveElement)
 					{
-						printf("Create NET_FIVE_ELEMENT_T Error:%p\n", pNetFiveElement);
+						LOG_ERROR("Create NET_FIVE_ELEMENT_T Error");
 						closesocket(pIoContext->sockAccept);
 						delete pTcpSession;
 						continue;
@@ -479,7 +483,12 @@ int CAcceptSession::AcceptSession_Accept()
 					int nLocalLen = sizeof(SOCKADDR_IN);
 					SOCKADDR_IN* RemoteAddr = NULL;
 					int nRemoteLen = sizeof(SOCKADDR_IN);
-					m_GetAcceptExSocketAddrs(pIoContext->szBuffer, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, (LPSOCKADDR*)&LocalAddr, &nLocalLen, (LPSOCKADDR*)&RemoteAddr, &nRemoteLen);
+					m_GetAcceptExSocketAddrs(pIoContext->szBuffer, MAX_BUFFER_LEN - ((sizeof(SOCKADDR_IN) + 16) * 2), sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, (LPSOCKADDR*)&LocalAddr, &nLocalLen, (LPSOCKADDR*)&RemoteAddr, &nRemoteLen);
+
+
+					LocalAddr = (SOCKADDR_IN*)(pIoContext->szBuffer + (MAX_BUFFER_LEN - 2 * (sizeof(sockaddr_in) + 16)) + 10);
+
+					RemoteAddr = (SOCKADDR_IN*)((pIoContext->szBuffer + (MAX_BUFFER_LEN - 2 * (sizeof(sockaddr_in) + 16)) + 10) + sizeof(sockaddr_in) + 10 + 2);
 
 					pNetFiveElement->strLocalIp = inet_ntoa(LocalAddr->sin_addr);
 					pNetFiveElement->nLocalPort = ntohs(LocalAddr->sin_port);
@@ -490,9 +499,8 @@ int CAcceptSession::AcceptSession_Accept()
 					int nRet = pTcpSession->TcpSession_Init(pIoContext->sockAccept, nNetEventModleIndex, pNetFiveElement, m_pITransPortEngineRecv, m_bIsHaveHead, this);
 					if (nRet < 0)
 					{
-						printf("TcpSession_Init Error:%d\n", nRet);
+						LOG_ERROR("TcpSession_Init Error:{}", nRet);
 						delete pTcpSession;
-						delete pNetFiveElement;
 						continue;
 					}
 
@@ -502,7 +510,7 @@ int CAcceptSession::AcceptSession_Accept()
 						nRet = pTcpSession->TcpSession_Fini();
 						if (nRet < 0)
 						{
-							printf("TcpSession_Fini Error:%d\n", nRet);
+							LOG_ERROR("TcpSession_Fini Error:{}", nRet);
 						}
 						delete pTcpSession;
 						continue;
@@ -514,12 +522,12 @@ int CAcceptSession::AcceptSession_Accept()
 						 nRet = m_pTcpSessionMgr->TcpSessionMgr_DelSession(pIoContext->sockAccept);
 						 if (nRet < 0)
 						 {
-							 printf("TcpSessionMgr_DelSession Error:%d\n", nRet);
+							 LOG_ERROR("TcpSessionMgr_DelSession Error:{}", nRet);
 						 }
 						 nRet = pTcpSession->TcpSession_Fini();
 						 if (nRet < 0)
 						 {
-							 printf("TcpSession_Fini Error:%d\n", nRet);
+							 LOG_ERROR("TcpSession_Fini Error:{}", nRet);
 						 }
 						 delete pTcpSession;
 						 continue;
@@ -531,12 +539,12 @@ int CAcceptSession::AcceptSession_Accept()
 						 nRet = m_pTcpSessionMgr->TcpSessionMgr_DelSession(pIoContext->sockAccept);
 						 if (nRet < 0)
 						 {
-							 printf("TcpSessionMgr_DelSession Error:%d\n", nRet);
+							 LOG_ERROR("TcpSessionMgr_DelSession Error:{}", nRet);
 						 }
 						 nRet = pTcpSession->TcpSession_Fini();
 						 if (nRet < 0)
 						 {
-							 printf("TcpSession_Fini Error:%d\n", nRet);
+							 LOG_ERROR("TcpSession_Fini Error:{}", nRet);
 						 }
 						 delete pTcpSession;
 						 continue;
@@ -548,32 +556,20 @@ int CAcceptSession::AcceptSession_Accept()
 						 nRet = pNetEventModleIOCP->NetEventModleIOCP_DelEvent(pTcpSession);
 						 if (nRet < 0)
 						 {
-							 printf("NetEventModleIOCP_DelEvent Error:%d\n", nRet);
+							 LOG_ERROR("NetEventModleIOCP_DelEvent Error:{}", nRet);
 						 }
 						 nRet = m_pTcpSessionMgr->TcpSessionMgr_DelSession(pIoContext->sockAccept);
 						 if (nRet < 0)
 						 {
-							 printf("TcpSessionMgr_DelSession Error:%d\n", nRet);
+							 LOG_ERROR("TcpSessionMgr_DelSession Error:{}", nRet);
 						 }
 						 nRet = pTcpSession->TcpSession_Fini();
 						 if (nRet < 0)
 						 {
-							 printf("TcpSession_Fini Error:%d\n", nRet);
+							 LOG_ERROR("TcpSession_Fini Error:{}", nRet);
 						 }
 						 delete pTcpSession;
 						 continue;
-					 }
-					 m_pPerIoContextAccept->sockAccept = WSASocketW(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-					 m_pPerIoContextAccept->wsaBuf.buf = m_pPerIoContextAccept->szBuffer;
-					 m_pPerIoContextAccept->wsaBuf.len = MAX_BUFFER_LEN;
-					 memset(m_pPerIoContextAccept->szBuffer, 0, MAX_BUFFER_LEN);
-					 DWORD dwRecvLen = 0;
-					 if (!m_AcceptEx(m_Socket, m_pPerIoContextAccept->sockAccept, &m_pPerIoContextAccept->wsaBuf, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, &dwRecvLen, &m_pPerIoContextAccept->Overlapped))
-					 {
-						 if (WSA_IO_PENDING != WSAGetLastError())
-						 {
-							 break;
-						 }
 					 }
 				}
 				break;

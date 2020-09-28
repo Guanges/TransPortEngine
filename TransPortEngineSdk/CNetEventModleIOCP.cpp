@@ -161,17 +161,17 @@ int CNetEventModleIOCP::NetEventModleIOCP_HandleData(LP_THREADINFO_T pThreadInfo
 				int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(Socket);
 				if (nRet < 0)
 				{
-					printf("TcpSessionMgr_DelSession Error Ret:%d\n", nRet);
+					LOG_ERROR("TcpSessionMgr_DelSession Error Ret:{}", nRet);
 				}
 				nRet = NetEventModleIOCP_DelEvent(pTcpSession);
 				if (nRet < 0)
 				{
-					printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+					LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 				}
 				nRet = pTcpSession->TcpSession_Fini();
 				if (nRet < 0)
 				{
-					printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+					LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 				}
 				bFlag = true;
 			}
@@ -193,7 +193,7 @@ int CNetEventModleIOCP::NetEventModleIOCP_HandleData(LP_THREADINFO_T pThreadInfo
 						nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(Socket);
 						if (nRet < 0)
 						{
-							printf("TcpSessionMgr_DelSession Error Ret:%d\n", nRet);
+							LOG_ERROR("TcpSessionMgr_DelSession Error Ret:{}", nRet);
 						}
 						else
 						{
@@ -202,12 +202,12 @@ int CNetEventModleIOCP::NetEventModleIOCP_HandleData(LP_THREADINFO_T pThreadInfo
 							nRet = NetEventModleIOCP_DelEvent(pTcpSession);
 							if (nRet < 0)
 							{
-								printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+								LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 							}
 							nRet = pTcpSession->TcpSession_Fini();
 							if (nRet < 0)
 							{
-								printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+								LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 							}
 							bFlag = true;
 						}
@@ -224,7 +224,7 @@ int CNetEventModleIOCP::NetEventModleIOCP_HandleData(LP_THREADINFO_T pThreadInfo
 						nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(Socket);
 						if (nRet < 0)
 						{
-							printf("TcpSessionMgr_DelSession Error Ret:%d\n", nRet);
+							LOG_ERROR("TcpSessionMgr_DelSession Error Ret:{}", nRet);
 						}
 						else
 						{
@@ -233,12 +233,12 @@ int CNetEventModleIOCP::NetEventModleIOCP_HandleData(LP_THREADINFO_T pThreadInfo
 							nRet = NetEventModleIOCP_DelEvent(pTcpSession);
 							if (nRet < 0)
 							{
-								printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+								LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 							}
 							nRet = pTcpSession->TcpSession_Fini();
 							if (nRet < 0)
 							{
-								printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+								LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 							}
 							bFlag = true;
 						}
@@ -247,12 +247,12 @@ int CNetEventModleIOCP::NetEventModleIOCP_HandleData(LP_THREADINFO_T pThreadInfo
 				break;
 				case IO_CONNECT:
 				{
-					printf("connect msg!\n");
+					LOG_ERROR("connect msg!");
 				}
 				break;
 				case IO_DISCONNECT:
 				{
-					printf("disconnect msg!\n");
+					LOG_ERROR("disconnect msg!");
 				}
 				break;
 				default:
@@ -290,7 +290,7 @@ bool CNetEventModleIOCP::AcceptSession_HandleAcceptError(CTcpSession* pTcpSessio
 			int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(Socket);
 			if (nRet < 0)
 			{
-				printf("TcpSessionMgr_DelSession Error Ret:%d\n", nRet);
+				LOG_ERROR("TcpSessionMgr_DelSession Error Ret:{}", nRet);
 			}
 			else
 			{
@@ -298,12 +298,12 @@ bool CNetEventModleIOCP::AcceptSession_HandleAcceptError(CTcpSession* pTcpSessio
 				nRet = NetEventModleIOCP_DelEvent(pTcpSession);
 				if (nRet < 0)
 				{
-					printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+					LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 				}
 				nRet = pTcpSession->TcpSession_Fini();
 				if (nRet < 0)
 				{
-					printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+					LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 				}
 				bFlag = true;
 			}
@@ -318,7 +318,7 @@ bool CNetEventModleIOCP::AcceptSession_HandleAcceptError(CTcpSession* pTcpSessio
 		int nRet = reinterpret_cast<CTcpSessionMgr*>(m_pTcpSessionMgr)->TcpSessionMgr_DelSession(Socket);
 		if (nRet < 0)
 		{
-			printf("TcpSessionMgr_DelSession Error Ret:%d\n", nRet);
+			LOG_ERROR("TcpSessionMgr_DelSession Error Ret:{}", nRet);
 		}
 		else
 		{
@@ -326,12 +326,12 @@ bool CNetEventModleIOCP::AcceptSession_HandleAcceptError(CTcpSession* pTcpSessio
 			nRet = NetEventModleIOCP_DelEvent(pTcpSession);
 			if (nRet < 0)
 			{
-				printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+				LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 			}
 			nRet = pTcpSession->TcpSession_Fini();
 			if (nRet < 0)
 			{
-				printf("NetEventModleIOCP_DelEvent Error Ret:%d\n", nRet);
+				LOG_ERROR("NetEventModleIOCP_DelEvent Error Ret:{}", nRet);
 			}
 			bFlag = true;
 		}

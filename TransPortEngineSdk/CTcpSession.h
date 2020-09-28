@@ -18,8 +18,9 @@
 using std::string;
 
 #define DWORD unsigned long
-
+#define MAX_EVENT_NUM 1000
 #else
+#include "vld.h"
 #include <winsock2.h>
 #include <MSWSock.h>
 #include <string>
@@ -40,6 +41,8 @@ using namespace std;
 #define IP_LEN     32
 #define DIGEST_LEN 40
 #define HEAD_TYPE_LEN 2
+
+#include "LogCommSdk.h"
 
 enum enPotocolType
 {
@@ -68,7 +71,7 @@ typedef struct NetFiveElement
 	int    nLocalPort;
 }NET_FIVE_ELEMENT_T, *LP_NET_FIVE_ELEMENT_T;
 
-#define MAX_BUFFER_LEN 8196
+#define MAX_BUFFER_LEN 4096
 
 typedef enum OperationType
 {
@@ -165,7 +168,7 @@ private:
 	LP_NET_FIVE_ELEMENT_T            m_pNetFiveElement;
 #ifndef _WINDOWS
 	int                              m_nSocket;
-	LP_RECV_CACHE_T                  m_pRecvCache;
+	//RECV_CACHE_T                     m_RecvCache;
 	vector<LP_BUFINFO_T>             m_SendBufs;
 	CCritSec                         m_SendBufLock;
 	INetEventModleEpoll*             m_pINetEventModleEpoll;

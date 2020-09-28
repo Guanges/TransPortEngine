@@ -10,9 +10,28 @@ CNetEventModleMgr::CNetEventModleMgr()
 
 CNetEventModleMgr::~CNetEventModleMgr()
 {
-	for (unsigned int i = 0; i < m_NetEventModles.size(); i++)
+	CSSAutoLock AutoLock(&m_NetEventModleLock);
+#ifndef _WINDOWS
+	map<int, CNetEventModleEpoll*>::iterator NetEventModleIt = m_NetEventModles.begin();
+#else
+	map<int, CNetEventModleIOCP*>::iterator NetEventModleIt = m_NetEventModles.begin();
+#endif
+	for (; NetEventModleIt != m_NetEventModles.end(); NetEventModleIt++)
 	{
-		delete m_NetEventModles[i];
+#ifndef _WINDOWS
+		int nRet = NetEventModleIt->second->NetEventModleEpoll_Fini();
+		if (nRet < 0)
+		{
+			LOG_ERROR("NetEventModleEpoll_Fini Error Ret:{}", nRet);
+		}
+#else
+		int nRet = NetEventModleIt->second->NetEventModleIOCP_Fini();
+		if (nRet < 0)
+		{
+			LOG_ERROR("NetEventModleIOCP_Fini Error Ret:{}", nRet);
+		}
+#endif
+		delete NetEventModleIt->second;
 	}
 	m_NetEventModles.clear();
 }
@@ -41,7 +60,7 @@ int CNetEventModleMgr::DestroyInstance()
 */
 int CNetEventModleMgr::NetEventModleMgr_Init(int nNetEventModleCount, int nNetEventModleThreadCount, void *pTcpSessionMgr)
 {
-	printf("nNetEventModleCount:%d nNetEventModleThreadCount:%d\n", nNetEventModleCount, nNetEventModleThreadCount);
+	LOG_INFO("nNetEventModleCount:{} nNetEventModleThreadCount:{}", nNetEventModleCount, nNetEventModleThreadCount);
 	if (0 == nNetEventModleCount || 0 == nNetEventModleThreadCount || NULL == pTcpSessionMgr)
 	{
 		return -1;
@@ -63,7 +82,7 @@ int CNetEventModleMgr::NetEventModleMgr_Init(int nNetEventModleCount, int nNetEv
 			return -3;
 		}
 		CSSAutoLock AutoLock(&m_NetEventModleLock);
-		printf("Index:%d pNetEventModleEpoll:%p\n", i, pNetEventModleEpoll);
+		LOG_INFO("Index:{} pNetEventModleEpoll:{}", i, reinterpret_cast<void *>(pNetEventModleEpoll));
 		m_NetEventModles.insert(map<int, CNetEventModleEpoll*>::value_type(i, pNetEventModleEpoll));
 #else
 		CNetEventModleIOCP *pNetEventModleIOCP = new CNetEventModleIOCP;
@@ -85,6 +104,7 @@ int CNetEventModleMgr::NetEventModleMgr_Init(int nNetEventModleCount, int nNetEv
 
 int CNetEventModleMgr::NetEventModleMgr_Fini()
 {
+	CSSAutoLock AutoLock(&m_NetEventModleLock);
 #ifndef _WINDOWS
 	map<int, CNetEventModleEpoll*>::iterator NetEventModleIt = m_NetEventModles.begin();
 #else
@@ -107,7 +127,7 @@ int CNetEventModleMgr::NetEventModleMgr_Fini()
 #endif
 		delete NetEventModleIt->second;
 	}
-
+	m_NetEventModles.clear();
 	return 0;
 }
 
