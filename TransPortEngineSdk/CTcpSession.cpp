@@ -294,9 +294,9 @@ int CTcpSession::TcpSession_IORecv()
 		nRet = read(m_nSocket, szRecvBuf, 1024);
 		if (nRet > 0)
 		{
-			if (m_bIsHaveHead)  //´¦ÀíÓĞÍ·Êı¾İ
+			if (m_bIsHaveHead)  //å¤„ç†æœ‰å¤´æ•°æ®
 			{
-				if (m_bIsRecvHead)  //ÒÑ¾­½ÓÊÕµ½Í·
+				if (m_bIsRecvHead)  //å·²ç»æ¥æ”¶åˆ°å¤´
 				{
 					if (static_cast<int>(m_nNeedRecvDataLen - TcpSession_GetRecvCacheLen()) == nRet)
 					{
@@ -335,7 +335,7 @@ int CTcpSession::TcpSession_IORecv()
 						return -1;
 					}
 				}
-				else //Î´½ÓÊÕµ½Í·
+				else //æœªæ¥æ”¶åˆ°å¤´
 				{
 					if (nRet > static_cast<int>(sizeof(HEAD_MSG_T) - TcpSession_GetRecvCacheLen()))
 					{
@@ -392,7 +392,7 @@ int CTcpSession::TcpSession_IORecv()
 					}
 				}
 			}
-			else //´¦ÀíÎŞÍ·Êı¾İ
+			else //å¤„ç†æ— å¤´æ•°æ®
 			{
 				if (m_pITransPortEngineRecv)
 				{
@@ -427,9 +427,9 @@ int CTcpSession::TcpSession_IORecv()
 #else
 	if (0 != m_pPerIoContextRecv->dwRecvLen)
 	{
-		if (m_bIsHaveHead)  //´¦ÀíÓĞÍ·Êı¾İ
+		if (m_bIsHaveHead)  //å¤„ç†æœ‰å¤´æ•°æ®
 		{
-			if (m_bIsRecvHead)  //ÒÑ¾­½ÓÊÕµ½Í·
+			if (m_bIsRecvHead)  //å·²ç»æ¥æ”¶åˆ°å¤´
 			{
 				if ((m_nNeedRecvDataLen - TcpSession_GetRecvCacheLen()) == m_pPerIoContextRecv->dwRecvLen)
 				{
@@ -467,7 +467,7 @@ int CTcpSession::TcpSession_IORecv()
 					return -1;
 				}
 			}
-			else //Î´½ÓÊÕµ½Í·
+			else //æœªæ¥æ”¶åˆ°å¤´
 			{
 				if (m_pPerIoContextRecv->dwRecvLen > (sizeof(HEAD_MSG_T) - TcpSession_GetRecvCacheLen()))
 				{
@@ -524,7 +524,7 @@ int CTcpSession::TcpSession_IORecv()
 				}
 			}
 		}
-		else //´¦ÀíÎŞÍ·Êı¾İ
+		else //å¤„ç†æ— å¤´æ•°æ®
 		{
 			if (m_pITransPortEngineRecv)
 			{
@@ -624,7 +624,8 @@ int CTcpSession::TcpSession_IOSend(const char *szData, const int nDataLen)
 		{
 			if (errno == EAGAIN)
 			{
-				break;
+				usleep(10);
+				continue;
 			}
 			perror("write");
 			return -2;
@@ -693,7 +694,7 @@ int CTcpSession::TcpSession_IORecv(int nPostRecvEventCount)
 	int nRet = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
 	if (nRet < 0)
 	{
-		LOG_ERROR("NetEventModleEpoll_ModEvent Error Ret£»{}", nRet);
+		LOG_ERROR("NetEventModleEpoll_ModEvent Error Retï¼›{}", nRet);
 		return -1;
 	}
 #else
