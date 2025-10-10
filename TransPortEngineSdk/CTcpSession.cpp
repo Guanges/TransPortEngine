@@ -208,22 +208,37 @@ int CTcpSession::TcpSession_IOSend(int nSquence)
 		LOG_ERROR("BufInfo Is Nullptr");
 		return 0;
 	}
-	int nRet = write(m_nSocket, pBufInfo->szBuf, pBufInfo->nBufLen);
-	if (nRet == -1) 
-	{
-        if (errno != EINTR && errno != EAGAIN) 
-		{
-			LOG_ERROR("write data errno:{}", errno);
+    int nRet = write(m_nSocket, pBufInfo->szBuf, pBufInfo->nBufLen);
+    if (nRet < 0)
+    {
+        if (errno == EAGAIN || errno == EINTR)
+        {
+            CSSAutoLock AutoLock(&m_SendBufLock);
+            m_SendBufs.insert(m_SendBufs.begin(), pBufInfo);
+            return 0;
+        }
+        LOG_ERROR("write data errno:{}", errno);
+        delete [] pBufInfo->szBuf;
+        delete pBufInfo;
+        return -1;
+    }
+    if (nRet < pBufInfo->nBufLen)
+    {
+        int remain = pBufInfo->nBufLen - nRet;
+        memmove(pBufInfo->szBuf, pBufInfo->szBuf + nRet, remain);
+        pBufInfo->nBufLen = remain;
+        CSSAutoLock AutoLock(&m_SendBufLock);
+        m_SendBufs.insert(m_SendBufs.begin(), pBufInfo);
+        int nret2 = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
+        if (nret2 < 0)
+        {
+            LOG_ERROR("NetEventModleEpoll_ModEvent Error Ret:{}", nret2);
             return -1;
-		}
-	}
-	else if (nRet != pBufInfo->nBufLen)
-	{
-		LOG_ERROR("Werite Data Len NeedLen:{}, RealLen:{}", pBufInfo->nBufLen, nRet);
-		return -2;
-	}
-	delete [] pBufInfo->szBuf;
-	delete pBufInfo;
+        }
+        return 0;
+    }
+    delete [] pBufInfo->szBuf;
+    delete pBufInfo;
 	nRet = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
 	if (nRet < 0)
 	{
@@ -616,43 +631,35 @@ int CTcpSession::TcpSession_IOSend(const char *szData, const int nDataLen)
 		return -1;
 	}
 #ifndef _WINDOWS
-	int nWriteLen = 0;
-	while (nWriteLen < nDataLen) 
-	{
-		int n = write(m_nSocket, szData + nWriteLen, nDataLen - nWriteLen);
-		if (n < 0) 
-		{
-			if (errno == EAGAIN)
-			{
-				usleep(10);
-				continue;
-			}
-			perror("write");
-			return -2;
-		}
-		nWriteLen += n;
-	}
-
-	if (nWriteLen < nDataLen)
-	{
-		LOG_INFO("Write Data Eagain");
-		LP_BUFINFO_T pBufInfo = new BUFINFO_T;
-		memset(pBufInfo, 0, sizeof(BUFINFO_T));
-
-		pBufInfo->szBuf = new char[nDataLen - nWriteLen + 1];
-		memset(pBufInfo->szBuf, 0, nDataLen - nWriteLen + 1);
-		memcpy(pBufInfo->szBuf, szData + nWriteLen, nDataLen - nWriteLen);
-		pBufInfo->nBufLen = nDataLen - nWriteLen;
-		CSSAutoLock AutoLock(&m_SendBufLock);
-		m_SendBufs.push_back(pBufInfo);
-
-		int nRet = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
-		if (nRet < 0)
-		{
-			LOG_ERROR("NetEventModleEpoll_ModEvent Error Ret:{}", nRet);
-			return -2;
-		}
-}
+    int n = write(m_nSocket, szData, nDataLen);
+    if (n < 0)
+    {
+        if (errno != EAGAIN && errno != EINTR)
+        {
+            perror("write");
+            return -2;
+        }
+        n = 0;
+    }
+    if (n < nDataLen)
+    {
+        LP_BUFINFO_T pBufInfo = new BUFINFO_T;
+        memset(pBufInfo, 0, sizeof(BUFINFO_T));
+        pBufInfo->nBufLen = nDataLen - n;
+        pBufInfo->szBuf = new char[pBufInfo->nBufLen + 1];
+        memset(pBufInfo->szBuf, 0, pBufInfo->nBufLen + 1);
+        memcpy(pBufInfo->szBuf, szData + n, pBufInfo->nBufLen);
+        {
+            CSSAutoLock AutoLock(&m_SendBufLock);
+            m_SendBufs.push_back(pBufInfo);
+        }
+        int nRet = m_pINetEventModleEpoll->NetEventModleEpoll_ModEvent(this);
+        if (nRet < 0)
+        {
+            LOG_ERROR("NetEventModleEpoll_ModEvent Error Ret:{}", nRet);
+            return -2;
+        }
+    }
 #else
 	if (false == m_bIsToBeClose)
 	{
