@@ -1,4 +1,8 @@
 #include "CAcceptSession.h"
+#ifndef _WINDOWS
+#include <errno.h>
+#include <netinet/tcp.h>
+#endif
 
 
 
@@ -67,10 +71,10 @@ void* NetFunctionEx(SOCKET Socket, GUID Guid)
 }
 
 ////////////////////////////////////////////////////////////////////
-// »ñµÃ±¾»úµÄIPµØÖ·
+// ï¿½ï¿½Ã±ï¿½ï¿½ï¿½ï¿½ï¿½IPï¿½ï¿½Ö·
 string CAcceptSession::GetLocalIP()
 {
-	// »ñµÃ±¾»úÖ÷»úÃû
+	// ï¿½ï¿½Ã±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	char hostname[MAX_PATH] = { 0 };
 	gethostname(hostname, MAX_PATH);
 	struct hostent FAR* lpHostEnt = gethostbyname(hostname);
@@ -79,10 +83,10 @@ string CAcceptSession::GetLocalIP()
 		return ADDR_ANY;
 	}
 
-	// È¡µÃIPµØÖ·ÁÐ±íÖÐµÄµÚÒ»¸öÎª·µ»ØµÄIP(ÒòÎªÒ»Ì¨Ö÷»ú¿ÉÄÜ»á°ó¶¨¶à¸öIP)
+	// È¡ï¿½ï¿½IPï¿½ï¿½Ö·ï¿½Ð±ï¿½ï¿½ÐµÄµï¿½Ò»ï¿½ï¿½Îªï¿½ï¿½ï¿½Øµï¿½IP(ï¿½ï¿½ÎªÒ»Ì¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü»ï¿½ó¶¨¶ï¿½ï¿½IP)
 	LPSTR lpAddr = lpHostEnt->h_addr_list[0];
 
-	// ½«IPµØÖ·×ª»¯³É×Ö·û´®ÐÎÊ½
+	// ï¿½ï¿½IPï¿½ï¿½Ö·×ªï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½Ê½
 	struct in_addr inAddr;
 	memmove(&inAddr, lpAddr, 4);
 	string strIP = inet_ntoa(inAddr);
@@ -183,8 +187,8 @@ int CAcceptSession::AcceptSession_Init(int nListenPort, int nEventModleCount, in
 	}
 
 #ifndef _WINDOWS
-	m_AcceptEpoll = epoll_create(1000);
-	if (m_AcceptEpoll < 0)
+    m_AcceptEpoll = epoll_create(1000);
+    if (m_AcceptEpoll == -1)
 	{
 		return -9;
 	}
@@ -267,18 +271,38 @@ int CAcceptSession::AcceptSession_Fini()
 int CAcceptSession::AcceptSession_Accept()
 {
 	m_nAcceptIndex = 0;
-	while (m_bAcceptThreadFlag)
+    while (m_bAcceptThreadFlag)
 	{
-		int nNumEvent = epoll_wait(m_AcceptEpoll, &m_pEpollEvent, 1000, 1000);
-		if (nNumEvent > 0) 
+        int nNumEvent = epoll_wait(m_AcceptEpoll, &m_pEpollEvent, 1000, 1000);
+        if (nNumEvent > 0) 
 		{
-			for (int i = 0; i < nNumEvent; i++)
+            for (int i = 0; i < nNumEvent; i++)
 			{
-				int nAcceptSock = accept(m_nSocket, NULL, NULL);
-				if (nAcceptSock > 0) 
+                for(;;)
 				{
-					m_nAcceptIndex++;
-					int nNetEventModleIndex = m_nAcceptIndex % m_nEventModleCount;
+                    int nAcceptSock = accept(m_nSocket, NULL, NULL);
+                    if (nAcceptSock < 0)
+                    {
+                        if (errno == EAGAIN || errno == EINTR)
+                        {
+                            break;
+                        }
+                        LOG_ERROR("accept error errno:{}", errno);
+                        break;
+                    }
+                    // set nonblocking
+                    int sflag = fcntl(nAcceptSock, F_GETFL, 0);
+                    if (sflag != -1)
+                    {
+                        fcntl(nAcceptSock, F_SETFL, sflag | O_NONBLOCK);
+                    }
+                    // socket options: TCP_NODELAY, KEEPALIVE (best-effort)
+                    int one = 1;
+                    setsockopt(nAcceptSock, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+                    setsockopt(nAcceptSock, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof(one));
+
+                    m_nAcceptIndex++;
+                    int nNetEventModleIndex = m_nAcceptIndex % m_nEventModleCount;
 
 					CTcpSession* pTcpSession = new CTcpSession;
 					if (NULL == pTcpSession)
@@ -325,7 +349,7 @@ int CAcceptSession::AcceptSession_Accept()
 						continue;
 					}
 
-					nRet = pNetEventModleEpoll->NetEventModleEpoll_AddEvent(pTcpSession);
+                    nRet = pNetEventModleEpoll->NetEventModleEpoll_AddEvent(pTcpSession);
 					if (nRet < 0)
 					{
 						nRet = m_pTcpSessionMgr->TcpSessionMgr_DelSession(nAcceptSock);
@@ -339,7 +363,7 @@ int CAcceptSession::AcceptSession_Accept()
 							LOG_ERROR("TcpSession_Fini Error:{}", nRet);
 						}
 						delete pTcpSession;
-						continue;
+                        continue;
 					}
 
 					nRet = pTcpSession->TcpSession_IORecv(1);
@@ -363,8 +387,7 @@ int CAcceptSession::AcceptSession_Accept()
 						delete pTcpSession;
 						continue;
 					}
-				}
-
+                }
 			}
 		}
 	}
@@ -450,7 +473,7 @@ int CAcceptSession::AcceptSession_Accept()
 			LP_PER_IO_CONTEXT_ACCEPT_T pIoContext = CONTAINING_RECORD(pOverlapped, PER_IO_CONTEXT_ACCEPT_T, Overlapped);
 			if ((0 == dwBytesTransfered) && (IO_ACCEPT == pIoContext->OpType || IO_RECV == pIoContext->OpType || IO_SEND == pIoContext->OpType))
 			{
-				// ÊÍ·Åµô¶ÔÓ¦µÄ×ÊÔ´
+				// ï¿½Í·Åµï¿½ï¿½ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½Ô´
 				//@TODO
 				closesocket(pIoContext->sockAccept);
 				continue;

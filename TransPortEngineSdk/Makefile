@@ -11,17 +11,17 @@ TARGET  := ./libTransPortEngineSdk.so
 #编译参数
 CC      := g++
 LIBS    := 
-LIBS    += 
-LDFLAGS := -std=c++11
-DEFINES := $(LDFLAGS)
+LIBS    += -pthread
+LDFLAGS := 
+DEFINES := 
 INCLUDE := 
 
 ver = debug  
 
 ifeq ($(ver), debug)  
-CFLAGS := -g -Wall -O3 -fPIC $(DEFINES) $(INCLUDE)
+CFLAGS := -g -O0 -fPIC -std=c++11 -Wall -Wextra -Wconversion -Wpedantic $(DEFINES) $(INCLUDE) -pthread
 else  
-CFLAGS := -Wall -O3 -fPIC $(DEFINES) $(INCLUDE)
+CFLAGS := -O3 -DNDEBUG -fPIC -std=c++11 -Wall -Wextra -Wconversion -Wpedantic $(DEFINES) $(INCLUDE) -pthread
 endif
 
 CXXFLAGS:= $(CFLAGS) -DHAVE_CONFIG_H
